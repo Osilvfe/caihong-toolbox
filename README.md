@@ -1,129 +1,80 @@
 # Caihong Toolbox
 
-面向 Caihong 的中文 Qt 图形设置工具。适配 Plasma 桌面与触屏，普通用户运行窗口，
-修改通过系统 Polkit 授权；不要求保存管理员密码，不把整个 GUI 以 root 运行。
+English | [简体中文](README.zh-CN.md)
 
-## 第一版功能
+Caihong Toolbox is the graphical settings app for the OnePlus Pad Pro
+(`caihong`) running Caihong Linux. It brings device settings and hardware
+checks into one touch-friendly window, and follows the local Plasma theme,
+font size and accent color.
 
-界面不使用固定配色，颜色取自 Qt/桌面调色板；标题层级和卡片布局保留，
-系统切换明暗主题、字体或控件样式时会重新应用。正文字体跟随系统字体族和字号，
-标题按系统字号比例缩放，按钮高度和导航行高随字体度量增长。
-中文回退显式优先 Noto Sans CJK SC 等简体字体，避免 LANG 缺失时 fontconfig
-按日文或韩文字形匹配。强调色使用调色板独立的 Accent 角色，与链接色 Link、
-选中背景 Highlight 分开；次要文字使用占位文字角色，边框使用中性中间色。
-导航列表、按钮、输入框和滚动条交给 Breeze 原生绘制，不覆盖选中态和控件背景。
-屏幕色卡测试仍使用固定纯色，避免影响色彩判断。
+It is installed by default in the
+[Caihong Linux rootfs](https://github.com/Osilvfe/caihong-linux-rootfs).
 
-- 设备总览：机型、内核、电量、温度、适配器、键盘和笔状态；未知信息保留为空。
-- 充电与电池：停充供电、实验性充电阈值、恢复自动充电，以及固件 SOH、循环与容量读数。
-  新增只读“功率与协议”卡片：汇总 buck 与活动电荷泵的电压×电流功率、USB-PD/PPS 能力、
-  PPS 电流上限、Type-C 供电/数据角色和正反插方向。
-  协议标签综合 USB 类型、PD 能力与活动泵状态；“厂商仍上报 SDP”不会覆盖双泵 PPS 证据。
-  无 PPS PDO、但高压双泵正在工作的连接显示为 VOOC/SVOOC，不会再误标为 PPS。
-  当前无法从公开接口区分 VOOC 与 SVOOC 子类型，界面保留组合名称；全零 PDO 视为无能力。
-  功率是 sysfs 遥测估算，不是外置功率计；PDO 能力也不表示当前已经取满。
-- 键盘：系统默认管理蓝牙 F4 补偿（无开关），保留标准 F 键优先选项及蓝牙或 Pogo 触控板启停。
-- 手写笔：设置页保留书写反馈开关、原厂四工具与五档强度；短振与笔身触控测试在“硬件测试”页。
-- 硬件测试：屏幕色卡、触屏与笔尖画板、手写笔短振与笔身触控、键盘与触控板、扬声器、麦克风、摄像头、音视频节点、网络与蓝牙、充电电池，以及分开的存储和单传感器观察。
-- 服务管理：动态列出 `caihong-*.service` 与 `caihong-*.timer`，显示运行/开机状态并管理启停；
-  按附件状态隐藏笔、键盘相关服务，不开放任意 systemd 单元。
-- 诊断：查看并复制只读控制器及附件状态。
+## Features
 
-这是本地预览版。协议和驱动此前的实测不等于这个新程序已经通过实机回归。
-仅铅笔三级纸感、固定短振与默认 F 键层的 F4 语义有此前物理验证；
-F4 仍有约 0.7 秒的键盘端上报空档，图标优先和其他触感组合仍需确认。
-笔身双击已收到真实专用通知，但识别率仍不稳定；滑动方向和编码尚未确认，不提供虚假的滑动动作。
+### Device overview
 
-## 笔身触控行为与测试
+- Model, kernel, battery level and temperature, adapter state, keyboard and pen.
+- Unknown readings stay empty instead of being guessed.
 
-在“硬件测试”页的笔身触控测试中选择双击行为：仅计数与界面提示、固定短振、切换当前工具和等级的书写纸感。
-“保存双击行为偏好”只保存当前用户的选择，不开启后台监控。默认仅观察，不执行硬件动作。
-动作仅在该窗口显式开启的观察期间生效；不设观察倒计时，不是开机常驻手势服务，也不会注入应用快捷键。
-切换纸感仍遵守原有确认、授权与生命周期规则，结束观察不会撤销已经显式切换的纸感设置。
+### Charging and battery
 
-将笔取下并唤醒，勾选真实离座确认后开始，等待“观察中”再在笔身前端平面触控区尝试双击。
-可以逐步改变位置与节奏，但目前不能断言此前失败只是触控区域不对。
-窗口同时显示专用双击计数、调试 `film` 事件、厂商电量及原始十六进制通知，可复制记录。
-只有专用双击特征的新 `01` 通知可触发动作；调试 `film`、缓存值、其他笔和旧窗口事件均不会触发。
-过期或过密事件不补执行硬件动作，滑动与笔尖事件不会被冒充为双击。
+- Switch between normal charging and bypass power, which stops battery charging
+  while keeping the adapter connected.
+- Set experimental charge start and stop thresholds for the current session.
+- View firmware-reported health, cycle count, capacity, and estimated input and
+  battery power.
+- See the detected charging protocol (USB PD, PPS, VOOC/SVOOC where known) and
+  PPS current limits.
 
-### 自由观察与滑动开关
+### Keyboard and touchpad
 
-点击“开始笔身观察”后，可自由双击、滑动、书写或静置，没有规定动作、自动分段或强制结束时间。
-双击和滑动共用同一个观察窗口。开始观察不会修改滑动开关；勾选或取消“启用笔身滑动”，
-再点“应用滑动开关”手动控制，不会自行关闭再开启。没有预设验收流程，也不自动判定效果好坏。
-滑动开关仅用已知原厂 `2c960100/01`，不改扫描或激光状态；复用已有普通模式初始化
-（`2c950100`，请求关闭演示），不另开启演示模式。
-停止、关闭、休眠和错误退出时，会请求关闭本窗口启用或未确认成功的滑动；没有动过开关则不写关闭请求。
-不声称恢复了无法查询的先前状态，断联时可能无法确认关闭，错误会保留。
+- Choose standard F1-F12 keys or the printed media functions for the top row.
+- Bluetooth F4 compatibility is enabled automatically and has no separate switch.
+- Enable or disable the touchpad when needed.
 
-仅读取配对身份匹配的蓝牙笔 Mouse / Keyboard 节点，不抢占输入、不读取键盘附件或屏幕笔尖。
-日志记录原始滚轮/按键代码及内核时间，界面显示滚轮记录数；高精度配对记录不等于额外的物理滑动次数。
-参考 `.11` 固件的触控膜事件 `05/FF` 会检查滑动开关，随后发送正负滚轮报告；目标 `.10` 的
-HID描述符也声明了滚轮，程序不据此猜测物理方向或注入翻页；可以直接观察原生输入。
-双击仍遵守当前所选行为，只想看日志时选择“仅计数与界面提示”。
+### Pen
 
-此观察复用了已找到的厂商电量通知转发门控，并校验配对记录与固件版本。
-订阅后须收到新鲜固件查询回复，才发送真实离座与原厂普通模式请求；不主动重连、不改变扫描或振动。
-普通模式的先前状态不可查询，结束不声称恢复了它，也不会伪造吸附通知回滚。
-可随时停止，关闭窗口、断联或休眠会清理本程序取得的通知订阅；窗口失联有十秒心跳保险。
-滚动日志最多保留256条，不会因累计事件数量达到旧限额而结束。硬件动作仍经Polkit授权，等待授权期间继续更新观察状态。
+- Turn writing feedback on or off and choose the original tool and intensity.
+- Test short vibration and the pen-body touch area.
+- Observe pen-body double-tap and slide events for diagnostics. Double-tap
+  behavior can be set to count only, vibrate, or toggle writing feedback.
 
-## 硬件测试
+### Hardware tests
 
-每次只打开一个观察窗口，手动停止或关闭，不设统一的一分钟时限。
-可保存 JSON 原始记录；不提供通过/失败打分，也不要求按特定顺序操作。
+- Display color card and drawing canvas for touch and pen input.
+- Keyboard and touchpad, speaker, microphone, camera, audio/video nodes,
+  network and Bluetooth, battery, storage, and individual sensors.
+- Every test starts and stops manually; nothing keeps running in the background.
 
-- 色卡与画板可全屏，不切换分辨率；画板区分触屏、笔尖压力和鼠标输入。
-- 键盘测试只接收本窗口输入并显示 Qt 键码及原生扫描码，不抓取全局键盘，不记录输入文本。
-  桌面保留的快捷键可能收不到；底层全节点验证仍需 evtest。
-- 扬声器手动播放两秒低幅度左右声道音调，不改音量；请先降低系统音量。
-- 麦克风手动开始/停止采集 PCM16，显示最近12秒逐秒 RMS、峰值与 dBFS，可回放全部录音。
-  默认使用 PipeWire 默认输入；本测试不替代长时 ALSA/PipeWire 双路径验证。
-  录音保存在用户缓存下的临时目录，关闭即删除，不自动保存或上传；仅保留64 MiB临时空间上限，防止误留录音占满存储。
-- 相机使用 Qt 多媒体后端列出的真实设备和模式，显示有效帧计数与实测接收帧率；
-  不保证 Qt 后端与 OBS、Firefox 使用相同链路，仍须分别验证。
-- 音视频节点页分别列举 PipeWire、ALSA、libcamera、V4L2；网络页只查当前连接，不扫描或重连。
-- 电池页读取带采样时间的工具箱状态，不切充电策略；存储页独立列出块设备，不作写压或 MCQ 测试。
-- 传感器为独立入口，选择某一项后手动开始、停止，切换选择时先释放旧传感器，不自动启动下一项。
-  列表枚举不启用所有传感器，只展示系统已公开的 SensorProxy、IIO 通道和温区接口。
-  读数实时显示在表格，原始记录注明来源和时间；停止或关闭会释放本程序的订阅。
-  SensorProxy 的屏幕方向接口只有方向和倾斜状态，不冒充加速度 XYZ；未公开的陀螺仪等不会伪造数值。
-  IIO 按加速度、陀螺仪、磁力、光照等通道类型分项，只读所选通道，不修改采样率、缓冲区或校准。
+### Services and diagnostics
 
-可选依赖：`pipewire-audio`（`pw-record`/`pw-play`）、`wireplumber`、`alsa-utils`、
-`v4l-utils`、`libcamera-tools`、`networkmanager`、`bluez-utils`，以及 Qt 多媒体后端。
-缺少程序、无设备、权限或后端错误会明确记录，不会自动安装或修改系统。
-报告可能含设备地址、网络及原始事件信息，分享前请检查。
+- Review and enable or disable Caihong services and timers.
+- Pen and keyboard entries stay hidden when those accessories are not present.
+- Copy the current diagnostic snapshot when asking for support.
 
-## 服务管理与附件隐藏
+## Opening
 
-“服务管理”只发现 `caihong-*.service` 和 `caihong-*.timer`，按名称白名单交给后台执行
-`systemctl enable --now` / `disable --now`。工具箱后台和 A/B 启动成功标记只读保护；
-静态、屏蔽或未加载的单元不会提供开关。可以管理 ADB、蓝牙自启、传感器、热点和桌面辅助服务，
-不会开放 SSH、用户服务或其他任意单元。
-
-键盘与手写笔入口按附件证据隐藏。键盘曾磁吸或出现已适配蓝牙节点后，会记住并持续显示；
-手写笔按配对记录、当前连接和观察记录判断。没有对应附件时，主页面、
-硬件测试中的相关卡片和笔/键盘服务项一起隐藏，避免只剩不可用开关。
-附件记录保存在当前用户的 QSettings 中；更换附件后可重新连接一次，让入口出现。
-“服务管理”页提供手动显示开关，便于笔暂时未配对或只想隐藏入口的机主覆盖自动判断。
-
-## 本地预览与检查
-
-依赖 Python 3.11+、PySide6 6.8+、PyGObject，测试另需 pytest。在本目录执行：
+Open **Caihong Toolbox** from the application menu, or run:
 
 ```sh
-python3 -m caihong_toolbox --demo
-make check
+caihong-toolbox
 ```
 
-`--demo` 只展示明确标记的演示数据，不读硬件、不连接后台、不发送设置请求。
-无后台或非 Caihong 机器也能打开普通窗口，但所有修改禁用。
+The window runs as your normal user. Charging, keyboard, pen and service
+changes go through a small privileged backend and ask for administrator
+approval only when needed.
 
-## 设备安装
+To preview the interface without touching hardware:
 
-在 Arch Linux ARM 上安装依赖：
+```sh
+caihong-toolbox --demo
+```
+
+## Installation
+
+On Caihong Linux the app is already installed. For a manual Arch Linux ARM
+installation:
 
 ```sh
 sudo pacman -S --needed pyside6 python-gobject polkit
@@ -132,89 +83,25 @@ sudo systemctl daemon-reload
 sudo systemctl reload dbus
 ```
 
-然后在应用菜单打开 **Caihong Toolbox 设备设置**，或运行 `caihong-toolbox`。
-不要重启系统 D-Bus。后台由 D-Bus 按需启动，无须启用开机服务；仅打开窗口不会修改硬件。
-安装位置固定为 `/usr`，也可用 `make DESTDIR=/指定打包目录 install` 准备安装树。
-不要直接以 root 从可被普通用户修改的源码目录运行后台。
+Do not restart the system D-Bus. The backend starts on demand and is not
+enabled as a boot service.
 
-充电控制复用设备已有、由 root 持有的 `/usr/local/sbin/caihong-charge`，
-且必须具备 Caihong 新充电 ABI；不在旧接口上写入阈值，不保存或启用开机充电策略。
-缺少候选内核接口时，相关功能不可用；本程序不刷写内核、模块或启动镜像。
+## Good to know
 
-## 权限与生命周期
+- Changes are applied only after you press an action button and approve the
+  administrator prompt.
+- The app does not flash kernels, modules or boot images.
+- Charge thresholds are experimental and apply only to the current session.
+- Tests become view-only when the matching kernel interface or accessory is
+  missing.
+- Microphone recordings are temporary and deleted when the test is closed.
+- Diagnostic data can contain device addresses; review it before sharing.
 
-GUI 通过系统 D-Bus 请求后台，仅白名单操作可进入 Polkit 授权；不接受任意命令、路径、
-UUID、寄存器或蓝牙载荷。不主动扫描、配对、连接、信任或屏蔽附件。
-修改同时限定设备树兼容字符串 `oneplus,caihong`，笔命令还核对已配对身份和已验证固件。
+## Development
 
-键盘由独立的 `caihong-keyboard.service` 默认管理，不依赖工具箱窗口；开机、蓝牙连接就绪和
-休眠恢复后自动适配，磁吸时使用 Pogo 路径，不主动配对或重连。F4 补偿没有用户开关，
-标准 F 键优先仍可切换，偏好持久保存在 `/var/lib/caihong-keyboard/preferences.json`。
-其他实验设置初始关闭，不自动恢复。用户显式开启纸感后，后台独立于窗口运行；
-关闭窗口不会撤销主动设置。键盘系统服务停止时关闭门控并请求触控板开启；
-笔反馈在断联、休眠或控制器状态失效时撤销，不自动恢复，不修改正常笔扫描模式。
-无设备连接时可能只能关闭触控器，无法确认笔端 BLE 关闭，界面会保留该错误，不冒充成功。
-
-可用以下命令停止工具箱后台并请求笔反馈安全清理（不停止默认键盘服务）：
+Python 3.11+, PySide6 6.8+ and PyGObject are required. Tests also need pytest.
 
 ```sh
-sudo systemctl stop caihong-toolbox.service
+make check
+python3 -m caihong_toolbox --demo
 ```
-
-## 数据与安全边界
-
-- 停充供电不等于电池完全隔离，输入不足时仍可能补电；电池正电流为充电，负电流为补电。
-- 健康度、循环与容量来自固件，可能是默认值或未学习值，不宣称独立测得的电池寿命。
-- 阈值按原始 SOC 判断；完整跨阈值、VOOC 退出/恢复、睡眠和长期稳定性尚待验证，应用前须确认实验风险。
-- ATT 返回和控制器 ACK 仅为请求证据，不代表物理马达效果；不根据输入功率猜测 VOOC 是否运行。
-- 操作失败可能已经部分应用，不承诺自动回滚所有硬件状态；错误和原始诊断会保留。
-- 诊断可能包含附件地址等信息，分享前请检查。没有联网遥测、自动更新或云端账号。
-
-## 本轮验证
-
-界面改为跟随本地 Qt/桌面调色板与系统字体后，194 项自动化检查通过、1 项按字体环境跳过。
-设备上全部 12 套配色、运行时配色切换、三档字号和三套控件样式均验证通过，
-卡片、侧栏、提示条、强调色与文字颜色逐项匹配调色板。设备实测加载的是 Breeze
-控件样式，逐控件采样与调色板一致：深色下窗口 `#202326`、侧栏 `#1d1f22`、
-卡片 `#141618`、次要文字 `#a1a9b1`、导航选中 `#1b4155`；浅色下窗口 `#eff0f1`、
-卡片 `#ffffff`、导航选中 `#3daee9`。导航选中、徽章与强调元素会随 KDE 强调色变化。
-滚动条宽度 21 px 与原生 `QScrollBar` 完全一致。导航仅用委托保持 48 px 行高，
-选中背景、按钮和输入框均交给 Breeze 绘制，不再用样式表模拟。
-触屏/画板随主题变化，屏幕纯色色卡保持固定。
-简体字形验证：设备默认字体为 Noto Sans（拉丁），`LANG` 为空时系统会把中文匹配到
-Noto Sans CJK KR；工具箱显式加入 Noto Sans CJK SC 后，逐字形渲染与 SC 一致，
-并与 KR/TC/JP 均不同。桌面会话本身使用 `LANG=zh_CN.UTF-8`。
-
-服务管理与附件入口隐藏版本通过 184 项自动化检查。设备上发现 14 个 Caihong 服务/计时器，
-通过真实 D-Bus/Polkit 路径验证了服务与计时器的 `enable --now` / `disable --now`，
-并确认工具箱后台和启动成功标记拒绝停用。模拟无附件覆盖时，键盘、手写笔页面及
-5 个相关服务项会一起隐藏；验证后已恢复用户原配置。
-
-自由观察与独立单传感器入口版本通过160项自动化检查；没有自动阶段或验收打分。
-
-按用户要求撤掉程序内固定验收流程，改成手动滑动开关、无倒计时的自由观察；
-删除自动阶段相关测试，新增手动控制、窗口归属、清理、长时事件环形存储及持续刷新的回归检查。
-历史自动化测试数量对应当时版本，不代表当前程序包含那些已撤销的流程。
-
-滑动对照入口加入后，158 项自动化检查通过，新增阶段边界、身份隔离、滚轮与指针区分、
-滑动请求白名单、退出关闭及 GUI 风险确认等测试；此前128项检查的结论保持。
-用户随后确认工具箱双击可工作，设备观察记录收到4条专用 `01` 并各伴随 `film 24`，
-这不是预设动作次数或识别率统计。滑动尚未完成新的人工对照，不宣称已修复。
-
-新增笔触控与硬件测试后，128 项自动化检查通过；另用独立 D-Bus 模拟 BlueZ，验证真实 Gio
-通知跨线程分发、专用双击计数、初始化顺序及四个订阅释放。这是软件模拟，不是笔的物理识别测试。
-已部署到设备并验证 GUI 启动、截图退出、服务状态及安装文件哈希一致；部署未自动开启笔身观察或音视频采集。
-新界面的双击动作、录音回放和摄像头等仍需人工实机验收，不把入口已实现当作全部硬件已通过。
-
-2026-10-30 已通过 91 项自动化测试，覆盖参数白名单、设备身份隔离、Polkit 拒绝与授权路径、原厂命令构造、
-F4 输入回放、笔开关回退、BlueZ 失败时关闭 SPI 门控、GUI 演示隔离及退出等自动化检查。
-另用独立 D-Bus 会话验证真实方法调用：状态可读，任意操作被拒绝，缺少授权时不能修改。
-
-已在设备安装并打开 GUI，用户确认显示、切页和触屏滚动正常，并明确确认通过 GUI 手动启用了 F4 后台。
-最初安装与状态读取没有开启设置；后续按用户要求将 F4 补偿迁移到独立系统默认服务，工具箱不再提供补偿开关。
-默认服务另有 20 项离线测试，并已验证不启动工具箱也能运行、服务重启后仍保留顶排偏好。
-部署保留设备原有的图标优先设置，没有擅自改成标准 F 键优先；两种模式可在工具箱切换。
-标准 F 键优先时，普通 F4 保持触控板目标、Fn+F4 切换；图标优先时两者互换。
-离座后已观察到系统自动接管，尚未新增物理按键、重连或休眠的完整回归，不能称为长期稳定性通过。
-本轮没有通过新 GUI 验证充电阈值、停充供电、其他触感组合或长时间稳定性，不能将此前驱动/协议测试冒充新程序验收。
-测试日志、界面预览、安装树与部署记录保存在工作区 `build/caihong-toolbox/`，不放入 rootfs 仓库。

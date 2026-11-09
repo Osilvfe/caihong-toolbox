@@ -21,3 +21,4 @@ install:
 	install -Dm644 resources/caihong-toolbox.desktop $(DESTDIR)/usr/share/applications/caihong-toolbox.desktop
 	install -Dm644 resources/caihong-toolbox.svg $(DESTDIR)/usr/share/icons/hicolor/scalable/apps/caihong-toolbox.svg
 	install -Dm644 README.md $(DESTDIR)/usr/share/doc/caihong-toolbox/README.md
+	install -Dm644 README.zh-CN.md $(DESTDIR)/usr/share/doc/caihong-toolbox/README.zh-CN.md
