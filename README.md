@@ -27,6 +27,14 @@ It is installed by default in the
 - See the detected charging protocol (USB PD, PPS, VOOC/SVOOC where known) and
   PPS current limits.
 
+### Performance and temperature
+
+- CPU usage, per-core current and maximum frequency, governor, GPU frequency,
+  load average and uptime.
+- Memory, swap and root filesystem usage.
+- Highest temperature for CPU, GPU, memory, NPU, video, camera, battery, power
+  management and modem groups. The full zone list is available in diagnostics.
+
 ### Keyboard and touchpad
 
 - Choose standard F1-F12 keys or the printed media functions for the top row.

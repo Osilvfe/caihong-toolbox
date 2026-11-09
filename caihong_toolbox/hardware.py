@@ -9,6 +9,7 @@ import time
 
 from .power import (active_value, capability_summary, classify_protocol,
                     parse_pps_capabilities, path_power_uw, pps_current_limit)
+from .resources import ResourceSampler
 from .services import validate_managed_service
 
 
@@ -22,6 +23,7 @@ class Paths:
         self.battery = self.path('/sys/class/power_supply/qcom-battmgr-bat')
         self.pps_cached = None
         self.pps_cached_at = 0.0
+        self.resources = ResourceSampler(self.root)
 
     def path(self, name):
         return self.root / name.lstrip('/')
@@ -91,8 +93,15 @@ def pen_controller(paths):
     return matches[0]
 
 
+_default_paths = None
+
+
 def read_snapshot(paths=None):
-    paths = paths or Paths()
+    global _default_paths
+    if paths is None:
+        if _default_paths is None:
+            _default_paths = Paths()
+        paths = _default_paths
     battery = {name: number(paths.battery / name) for name in (
         'capacity', 'temp', 'current_now', 'voltage_now', 'power_now', 'state_of_health',
         'cycle_count', 'charge_full', 'charge_full_design',
@@ -181,6 +190,7 @@ def read_snapshot(paths=None):
         'device': {'supported': is_caihong(paths), 'model': text(paths.path('/proc/device-tree/model')),
                    'kernel': platform.release(), 'architecture': platform.machine()},
         'battery': battery, 'adapter': adapter, 'keyboard': keyboard, 'pen': pen,
+        'resources': paths.resources.read(),
         'diagnostics': {name: text(paths.battery / ('device/' + name)) for name in (
             'oneplus_charge_control_status', 'oneplus_power_diagnostics', 'oneplus_ffc_status')},
     }

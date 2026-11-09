@@ -12,10 +12,11 @@ from PySide6.QtDBus import QDBusConnection, QDBusMessage, QDBusPendingCallWatche
 from PySide6.QtGui import (QFont, QFontDatabase, QFontInfo, QFontMetrics,
                            QIcon, QPalette)
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QFormLayout, QFrame, QGridLayout,
-    QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
-    QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QScroller, QSizePolicy,
-    QSpinBox, QStackedWidget, QStyledItemDelegate, QVBoxLayout, QWidget,
+    QAbstractItemView, QApplication, QCheckBox, QComboBox, QFormLayout, QFrame,
+    QGridLayout, QHBoxLayout, QHeaderView, QLabel, QListWidget, QListWidgetItem,
+    QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
+    QScrollArea, QScroller, QSizePolicy, QSpinBox, QStackedWidget,
+    QStyledItemDelegate, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from . import __version__
@@ -54,6 +55,24 @@ def label(value, name=None):
 
 def formatted(value, divisor=1, suffix='', precision=1):
     return '—' if value is None else f'{value / divisor:.{precision}f}{suffix}'
+
+
+def format_uptime(seconds):
+    if seconds is None:
+        return '—'
+    days, rest = divmod(int(seconds), 86400)
+    hours, rest = divmod(rest, 3600)
+    minutes = rest // 60
+    if days:
+        return f'{days} 天 {hours} 小时'
+    if hours:
+        return f'{hours} 小时 {minutes} 分'
+    return f'{minutes} 分'
+
+
+THERMAL_LABELS = {'cpu': 'CPU', 'gpu': 'GPU', 'ddr': '内存', 'npu': 'NPU',
+                  'video': '视频', 'camera': '摄像头', 'battery': '电池',
+                  'pmic': '电源管理', 'modem': '调制解调器', 'other': '其他'}
 
 
 THEME_EVENTS = frozenset((
@@ -178,6 +197,34 @@ def demo_snapshot():
              'protected': True, 'manageable': False, 'enabled': True, 'active': True,
              'state': 'active/running', 'unit_file_state': 'static'},
         ]},
+        'resources': {
+            'cpu': {'usage': 18.4, 'model': 'OnePlus Pad Pro · SM8650 · 演示数据',
+                    'governor': 'schedutil',
+                    'cores': [{'id': index, 'usage': usage, 'freq_mhz': freq, 'max_mhz': 2842}
+                              for index, (usage, freq) in enumerate((
+                                  (12.4, 1574), (18.2, 2265), (9.8, 960), (21.5, 2035),
+                                  (17.1, 2035), (14.6, 1075), (11.3, 1075), (8.7, 2035)))]},
+            'memory': {'total_kib': 15515764, 'available_kib': 10535024,
+                       'used_kib': 4980740, 'usage': 32.1,
+                       'swap_total_kib': 0, 'swap_free_kib': 0},
+            'load': {'one': 0.42, 'five': 0.38, 'fifteen': 0.31, 'uptime_s': 266400},
+            'gpu': {'name': '3d00000.gpu', 'freq_mhz': 680, 'max_mhz': 903},
+            'storage': {'total_bytes': 238400000000, 'used_bytes': 28608000000,
+                        'free_bytes': 209792000000, 'usage': 12.0},
+            'thermal': {'summary': {'cpu': 44.6, 'gpu': 42.4, 'ddr': 41.8, 'npu': 41.2,
+                                    'video': 41.8, 'camera': 40.3, 'battery': 33.0,
+                                    'pmic': 37.0, 'modem': 41.6, 'other': 41.4},
+                        'zones': [{'name': 'cpuss0-thermal', 'category': 'cpu', 'celsius': 44.6},
+                                  {'name': 'cpuss1-thermal', 'category': 'cpu', 'celsius': 43.4},
+                                  {'name': 'gpuss0-thermal', 'category': 'gpu', 'celsius': 42.4},
+                                  {'name': 'ddr-thermal', 'category': 'ddr', 'celsius': 41.8},
+                                  {'name': 'video-thermal', 'category': 'video', 'celsius': 41.8},
+                                  {'name': 'camera0-thermal', 'category': 'camera', 'celsius': 40.3},
+                                  {'name': 'qcom-battmgr-bat', 'category': 'battery', 'celsius': 33.0},
+                                  {'name': 'pm8550-thermal', 'category': 'pmic', 'celsius': 37.0},
+                                  {'name': 'modem3-thermal', 'category': 'modem', 'celsius': 41.6},
+                                  {'name': 'aoss0-thermal', 'category': 'other', 'celsius': 41.4}]},
+        },
         'diagnostics': {'说明': '界面演示，不读取设备、不调用后台、不发送任何设置请求。'},
     }
 
@@ -234,7 +281,9 @@ class Window(QMainWindow):
         side.addSpacing(25)
         self.navigation = QListWidget()
         self.navigation.setItemDelegate(NavigationDelegate(self.navigation))
-        for title, icon_name in (('设备总览', 'computer'), ('充电与电池', 'battery'),
+        for title, icon_name in (('设备总览', 'computer'),
+                                 ('性能与温度', 'utilities-system-monitor'),
+                                 ('充电与电池', 'battery'),
                                  ('键盘与触控板', 'input-keyboard'), ('手写笔', 'draw-freehand'),
                                  ('硬件测试', 'applications-engineering'),
                                  ('服务管理', 'preferences-system-services'),
@@ -264,6 +313,7 @@ class Window(QMainWindow):
         content.addWidget(self.result)
         horizontal.addLayout(content, 1)
         self.build_overview()
+        self.build_resources()
         self.build_charge()
         self.build_keyboard()
         self.build_pen()
@@ -383,6 +433,55 @@ class Window(QMainWindow):
         layout.addWidget(label('初版仅接入有依据的设备接口。不自动刷内核，不改笔扫描模式，不主动配对或重连附件。', 'muted'))
         layout.addStretch()
 
+    def build_resources(self):
+        layout = self.page('性能与温度', '只读采样 CPU、内存、GPU 与热区；不修改频率、调频策略或温度阈值。')
+        self.resource_summary = label('正在采样…', 'notice')
+        layout.addWidget(self.resource_summary)
+        grid = QGridLayout()
+        grid.setSpacing(14)
+        self.cpu_usage = Metric('CPU 使用率', '两次采样之间的整机平均值')
+        self.cpu_temperature = Metric('CPU 最高温度', '按 CPU 热区取最高值')
+        self.memory_usage = Metric('内存使用', '按 MemAvailable 计算')
+        self.load_average = Metric('系统负载', '1 分钟平均值')
+        for index, metric in enumerate((self.cpu_usage, self.cpu_temperature,
+                                        self.memory_usage, self.load_average)):
+            grid.addWidget(metric, index // 2, index % 2)
+        layout.addLayout(grid)
+        cpu = self.card(layout, '处理器', '各核心的当前频率和两次采样之间的使用率；只读。')
+        self.cpu_table = self.resource_table(('核心', '使用率', '当前 / 最大频率'))
+        self.cpu_table.setMinimumHeight(260)
+        self.cpu_table.setMaximumHeight(380)
+        cpu.addWidget(self.cpu_table)
+        thermal = self.card(layout, '温度', '按类别显示最高热区；完整热区列表可在诊断信息中查看。')
+        self.thermal_table = self.resource_table(('类别', '最高温度'))
+        self.thermal_table.setMinimumHeight(240)
+        self.thermal_table.setMaximumHeight(360)
+        thermal.addWidget(self.thermal_table)
+        memory = self.card(layout, '内存与存储', '只读读取 /proc/meminfo 与根分区容量。')
+        self.memory_details = label('—', 'notice')
+        memory.addWidget(self.memory_details)
+        layout.addStretch()
+
+    def resource_table(self, headers):
+        table = QTableWidget(0, len(headers))
+        table.setHorizontalHeaderLabels(headers)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        table.setFrameShape(QFrame.Shape.NoFrame)
+        table.setShowGrid(False)
+        table.setAlternatingRowColors(True)
+        table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        table.verticalHeader().setVisible(False)
+        table.verticalHeader().setDefaultSectionSize(34)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        return table
+
+    def fit_resource_table(self, table, rows):
+        header = max(32, table.horizontalHeader().sizeHint().height())
+        table.setFixedHeight(header + max(1, rows) * 34)
+
     def build_charge(self):
         layout = self.page('充电与电池', '控制充电行为，保留安全边界与原始依据。')
         self.battery_details = label('—', 'notice')
@@ -459,7 +558,7 @@ class Window(QMainWindow):
         writing.addLayout(form)
         self.button(writing, '应用书写反馈', 'pen-writing', self.apply_writing)
         tests = QPushButton('打开手写笔功能测试 → 硬件测试')
-        tests.clicked.connect(lambda: self.navigation.setCurrentRow(4))
+        tests.clicked.connect(lambda: self.navigation.setCurrentRow(5))
         layout.addWidget(tests, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(label('短振、笔尖画板与笔身触控观察已移至“硬件测试”页；本页只保留书写反馈设置。', 'muted'))
         layout.addWidget(label('断联、休眠或控制器状态失效时撤销书写反馈，不自动恢复。关闭窗口停止笔身观察，但不会关闭此前显式启用的书写反馈。', 'notice'))
@@ -530,7 +629,7 @@ class Window(QMainWindow):
             if kind == 'touch':
                 self.build_pen_tests(layout)
         self.pen_settings_button = QPushButton('书写纸感设置 → 手写笔页')
-        self.pen_settings_button.clicked.connect(lambda: self.navigation.setCurrentRow(3))
+        self.pen_settings_button.clicked.connect(lambda: self.navigation.setCurrentRow(4))
         layout.addWidget(self.pen_settings_button)
         layout.addStretch()
 
@@ -813,20 +912,107 @@ class Window(QMainWindow):
             checkbox.setChecked(bool(visible))
             checkbox.blockSignals(False)
         self.accessory_syncing = False
-        self.navigation.setRowHidden(2, not self.keyboard_visible)
-        self.navigation.setRowHidden(3, not self.pen_visible)
+        self.navigation.setRowHidden(3, not self.keyboard_visible)
+        self.navigation.setRowHidden(4, not self.pen_visible)
         self.test_cards['keyboard'].setVisible(self.keyboard_visible)
         self.pen_tests_widget.setVisible(self.pen_visible)
         self.pen_settings_button.setVisible(self.pen_visible)
-        if self.navigation.currentRow() in (2, 3):
-            hidden = (self.navigation.currentRow() == 2 and not self.keyboard_visible or
-                      self.navigation.currentRow() == 3 and not self.pen_visible)
+        if self.navigation.currentRow() in (3, 4):
+            hidden = (self.navigation.currentRow() == 3 and not self.keyboard_visible or
+                      self.navigation.currentRow() == 4 and not self.pen_visible)
             if hidden:
                 self.navigation.setCurrentRow(0)
+
+    def update_resources(self, resources):
+        resources = resources or {}
+        cpu = resources.get('cpu') or {}
+        memory = resources.get('memory') or {}
+        load = resources.get('load') or {}
+        gpu = resources.get('gpu') or {}
+        storage = resources.get('storage') or {}
+        thermal = resources.get('thermal') or {}
+        self.cpu_usage.value.setText(formatted(cpu.get('usage'), suffix='%'))
+        summary = thermal.get('summary') or {}
+        self.cpu_temperature.value.setText(formatted(summary.get('cpu'), suffix=' °C'))
+        total, used = memory.get('total_kib'), memory.get('used_kib')
+        if total and used is not None:
+            self.memory_usage.value.setText(formatted(memory.get('usage'), suffix='%', precision=0))
+            self.memory_usage.caption.setText(
+                f"已用 {used / 1048576:.1f} / {total / 1048576:.1f} GiB")
+        else:
+            self.memory_usage.value.setText('—')
+            self.memory_usage.caption.setText('内存信息不可用')
+        one, five, fifteen = load.get('one'), load.get('five'), load.get('fifteen')
+        if one is None:
+            self.load_average.value.setText('—')
+            self.load_average.caption.setText('1 / 5 / 15 分钟平均不可用')
+        else:
+            self.load_average.value.setText(f'{one:.2f}')
+            self.load_average.caption.setText(
+                f"1 / 5 / 15 分钟：{one:.2f} / {five:.2f} / {fifteen:.2f}")
+        model = cpu.get('model') or '处理器信息不可用'
+        frequency, maximum = gpu.get('freq_mhz'), gpu.get('max_mhz')
+        gpu_text = ('GPU 频率不可用' if frequency is None else
+                    f"GPU {frequency} / {maximum} MHz" if maximum else f"GPU {frequency} MHz")
+        self.resource_summary.setText(
+            f"{model}\n调频策略：{cpu.get('governor') or '—'}  ·  {gpu_text}"
+            f"  ·  运行时间：{format_uptime(load.get('uptime_s'))}")
+        cores = cpu.get('cores') or [{}]
+        self.cpu_table.setRowCount(len(cores))
+        self.fit_resource_table(self.cpu_table, len(cores))
+        for row, core in enumerate(cores):
+            current = formatted(core.get('freq_mhz'), suffix=' MHz', precision=0)
+            highest = formatted(core.get('max_mhz'), suffix=' MHz', precision=0)
+            values = (f"核心 {core.get('id')}" if core else '—',
+                      formatted(core.get('usage'), suffix='%'), f'{current} / {highest}')
+            for column, value in enumerate(values):
+                item = self.cpu_table.item(row, column)
+                if item is None:
+                    item = QTableWidgetItem()
+                    self.cpu_table.setItem(row, column, item)
+                item.setText(value)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                                      if column else
+                                      Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        rows = [(THERMAL_LABELS.get(key, key), value)
+                for key, value in summary.items()] or [('—', None)]
+        self.thermal_table.setRowCount(len(rows))
+        self.fit_resource_table(self.thermal_table, len(rows))
+        for row, (name, value) in enumerate(rows):
+            for column, text in enumerate((name, formatted(value, suffix=' °C'))):
+                item = self.thermal_table.item(row, column)
+                if item is None:
+                    item = QTableWidgetItem()
+                    self.thermal_table.setItem(row, column, item)
+                item.setText(text)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                                      if column else
+                                      Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        details = []
+        if total and used is not None:
+            available = memory.get('available_kib') or 0
+            details.append(f"内存：已用 {used / 1048576:.1f} GiB，可用 {available / 1048576:.1f} GiB，"
+                           f"共 {total / 1048576:.1f} GiB")
+        else:
+            details.append('内存：信息不可用')
+        swap_total, swap_free = memory.get('swap_total_kib'), memory.get('swap_free_kib')
+        if swap_total and swap_free is not None:
+            details.append(f"交换：已用 {(swap_total - swap_free) / 1048576:.1f} / "
+                           f"{swap_total / 1048576:.1f} GiB")
+        else:
+            details.append('交换：未启用')
+        capacity, used_bytes = storage.get('total_bytes'), storage.get('used_bytes')
+        if capacity and used_bytes is not None:
+            details.append(f"根分区：已用 {used_bytes / 1073741824:.1f} / {capacity / 1073741824:.1f} GiB"
+                           f"（{storage.get('usage', 0):.0f}%）")
+        else:
+            details.append('根分区：信息不可用')
+        self.memory_details.setText('  ·  '.join(details))
 
     def update_status(self, snapshot):
         self.snapshot_time = datetime.now(timezone.utc).isoformat()
         self.snapshot = copy.deepcopy(snapshot)
+        self.update_resources(snapshot.get('resources'))
         device, battery = snapshot['device'], snapshot['battery']
         keyboard, pen = snapshot['keyboard'], snapshot['pen']
         supported = device['supported']
@@ -1000,8 +1186,9 @@ def main():
     parser = argparse.ArgumentParser(description='Caihong Toolbox 图形设置工具')
     parser.add_argument('--demo', action='store_true', help='纯界面演示，不读取或修改硬件')
     parser.add_argument('--screenshot', type=Path, help='保存界面预览后退出')
-    parser.add_argument('--page', choices=('overview', 'charge', 'keyboard', 'pen', 'tests',
-                                           'services', 'diagnostics'), default='overview')
+    parser.add_argument('--page', choices=('overview', 'resources', 'charge', 'keyboard', 'pen',
+                                           'tests', 'services', 'diagnostics'),
+                        default='overview')
     arguments = parser.parse_args()
     if os.geteuid() == 0 and not arguments.demo:
         parser.error('请以普通桌面用户启动 GUI，修改通过系统 Polkit 授权')
@@ -1010,8 +1197,8 @@ def main():
     application.setApplicationDisplayName('Caihong Toolbox')
     application.setOrganizationName('Caihong')
     window = Window(arguments.demo)
-    window.navigation.setCurrentRow(('overview', 'charge', 'keyboard', 'pen', 'tests',
-                                     'services', 'diagnostics').index(arguments.page))
+    window.navigation.setCurrentRow(('overview', 'resources', 'charge', 'keyboard', 'pen',
+                                     'tests', 'services', 'diagnostics').index(arguments.page))
     window.show()
     if arguments.screenshot:
         def capture():

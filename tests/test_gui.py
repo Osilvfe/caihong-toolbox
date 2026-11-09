@@ -41,7 +41,7 @@ def window(application, monkeypatch):
 
 
 def test_demo_pages_are_real_widgets_and_read_only(window, application):
-    assert window.pages.count() == 7
+    assert window.pages.count() == 8
     assert '76' in window.capacity.value.text()
     for index in range(7):
         window.navigation.setCurrentRow(index)
@@ -61,6 +61,17 @@ def test_theme_follows_palette_without_fixed_colors():
     assert 'QScrollArea > QWidget > QWidget' not in STYLE
     assert 'QListWidget::item' not in STYLE
     assert 'QPushButton#primary' not in STYLE
+
+
+def test_resource_page_shows_demo_metrics(window, application):
+    window.navigation.setCurrentRow(1)
+    application.processEvents()
+    assert window.pages.currentIndex() == 1
+    assert window.cpu_usage.value.text() == '18.4%'
+    assert window.cpu_table.rowCount() == 8
+    assert window.thermal_table.rowCount() == 10
+    assert '已用' in window.memory_usage.caption.text()
+    assert '32.1' not in window.memory_usage.value.text()
 
 
 def test_connection_badge_stays_on_one_line(window):
@@ -98,7 +109,7 @@ def test_missing_backend_is_read_only(window):
 
 
 def test_service_manager_lists_and_hides_missing_accessories(window, application):
-    window.navigation.setCurrentRow(5)
+    window.navigation.setCurrentRow(6)
     application.processEvents()
     assert len(window.service_cards) == 4
     assert not window.service_cards['caihong-keyboard.service']['frame'].isHidden()
@@ -108,8 +119,8 @@ def test_service_manager_lists_and_hides_missing_accessories(window, application
     snapshot['pen'].update(connected=False, writing=None, paired=False, hardware_support=False)
     window.demo = False
     window.update_status(snapshot)
-    assert window.navigation.isRowHidden(2)
     assert window.navigation.isRowHidden(3)
+    assert window.navigation.isRowHidden(4)
     assert window.service_cards['caihong-keyboard.service']['frame'].isHidden()
     assert window.service_cards['caihong-pen-autoconnect.timer']['frame'].isHidden()
     assert not window.service_cards['caihong-ssc.service']['frame'].isHidden()
@@ -127,22 +138,22 @@ def test_accessory_override_can_reveal_missing_hardware(window):
     snapshot['keyboard'].update(available=False, pogo_attached=0)
     snapshot['pen'].update(connected=False, writing=None, paired=False, hardware_support=False)
     window.update_status(snapshot)
-    assert not window.navigation.isRowHidden(2)
     assert not window.navigation.isRowHidden(3)
+    assert not window.navigation.isRowHidden(4)
     assert not window.test_cards['keyboard'].isHidden()
     assert not window.pen_tests_widget.isHidden()
 
 
 def test_pen_tests_are_on_hardware_test_page(window, application):
-    window.navigation.setCurrentRow(3)
+    window.navigation.setCurrentRow(4)
     application.processEvents()
     assert not window.pen_touch_log.isVisible()
     assert not window.pen_stop.isVisible()
-    window.navigation.setCurrentRow(4)
+    window.navigation.setCurrentRow(5)
     application.processEvents()
     assert window.pen_touch_log.isVisible()
     assert window.pen_stop.isVisible()
-    pen_page_buttons = window.pages.widget(3).findChildren(type(window.pen_stop))
+    pen_page_buttons = window.pages.widget(4).findChildren(type(window.pen_stop))
     assert all(button.text() != '开始笔身观察' for button in pen_page_buttons)
 
 
