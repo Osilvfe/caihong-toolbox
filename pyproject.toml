@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "caihong-toolbox"
+version = "0.1.0"
+description = "Caihong 设备专属图形设置工具"
+requires-python = ">=3.11"
+dependencies = ["PySide6>=6.8", "PyGObject>=3.46"]
+
+[project.scripts]
+caihong-toolbox = "caihong_toolbox.gui:main"
+
+[tool.setuptools.packages.find]
+include = ["caihong_toolbox*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

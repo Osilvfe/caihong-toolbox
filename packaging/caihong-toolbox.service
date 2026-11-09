@@ -1,0 +1,20 @@
+[Unit]
+Description=Caihong Toolbox device settings service
+After=dbus.service
+
+[Service]
+Type=dbus
+BusName=org.caihong.Toolbox1
+ExecStart=/usr/lib/caihong-toolbox/caihong-toolbox-service
+User=root
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/sys
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+TimeoutStopSec=35

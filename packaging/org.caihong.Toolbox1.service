@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.caihong.Toolbox1
+Exec=/usr/lib/caihong-toolbox/caihong-toolbox-service
+User=root
+SystemdService=caihong-toolbox.service

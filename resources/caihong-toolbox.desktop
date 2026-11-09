@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Caihong Toolbox
+Name[zh_CN]=Caihong Toolbox 设备设置
+Comment=Caihong device settings
+Comment[zh_CN]=充电、电池、键盘与手写笔设置
+Exec=caihong-toolbox
+Icon=caihong-toolbox
+Terminal=false
+Categories=Settings;HardwareSettings;Qt;
+StartupNotify=true
+StartupWMClass=caihong-toolbox
