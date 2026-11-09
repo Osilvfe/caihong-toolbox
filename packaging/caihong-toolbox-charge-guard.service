@@ -1,0 +1,19 @@
+[Unit]
+Description=Automatic Caihong charge hold enforcement
+After=caihong-toolbox.service
+ConditionPathExists=/var/lib/caihong-toolbox/charge-hold.json
+ConditionPathExists=/sys/class/power_supply/qcom-battmgr-bat/charge_behaviour
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/caihong-toolbox/caihong-toolbox-charge-guard
+Nice=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=/sys

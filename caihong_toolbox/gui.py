@@ -136,6 +136,7 @@ def demo_snapshot():
         'demo': True, 'service': False,
         'device': {'supported': True, 'model': 'OnePlus Pad Pro · Caihong',
                    'kernel': '7.3 · 演示数据', 'architecture': 'aarch64'},
+        'charge_hold': {'enabled': True, 'level': 80},
         'battery': {'capacity': 76, 'temp': 325, 'voltage_now': 4020000, 'current_now': 580000,
                     'power_uw': 2331600, 'status': 'Charging', 'state_of_health': 100, 'cycle_count': 1,
                     'charge_full': 9492000, 'charge_full_design': 9492000, 'capacity_ratio': 100,
@@ -270,9 +271,10 @@ class Window(QMainWindow):
         self.build_tests()
         self.build_services()
         self.build_diagnostics()
-        for control, section in ((self.bypass, 'charge'), (self.media, 'keyboard'), (self.writing, 'pen')):
+        for control, section in ((self.bypass, 'charge'), (self.hold, 'charge'), (self.media, 'keyboard'), (self.writing, 'pen')):
             control.toggled.connect(partial(self.mark_dirty, section))
-        for control, section in ((self.start_limit, 'charge'), (self.end_limit, 'charge'), (self.level, 'pen')):
+        for control, section in ((self.start_limit, 'charge'), (self.end_limit, 'charge'),
+                                 (self.hold_level, 'charge'), (self.level, 'pen')):
             control.valueChanged.connect(partial(self.mark_dirty, section))
         self.tool.currentIndexChanged.connect(partial(self.mark_dirty, 'pen'))
         self.touchpad.currentIndexChanged.connect(partial(self.mark_dirty, 'keyboard'))
@@ -418,7 +420,21 @@ class Window(QMainWindow):
         limits.addLayout(form)
         self.button(limits, '应用阈值…', 'charge-limit', self.apply_limits)
         self.button(limits, '恢复自动充电 / 95–100%', 'charge-reset', lambda: self.perform({'action': 'charge-reset'}))
-        layout.addWidget(label('修改只应用于当前运行期，不保存开机策略。失败可能已部分应用，不能将失败提示当作自动回滚。', 'warning'))
+        limits.addWidget(label('修改只应用于当前运行期,不保存开机策略。失败可能已部分应用,不能将失败提示当作自动回滚。', 'warning'))
+        hold = self.card(layout, '自动维持电量', '达到目标电量时自动切换到旁路供电,低于目标时恢复充电;由后台计时器周期性检查。旁路供电不承诺电池硬件隔离。')
+        self.hold = QCheckBox('自动维持电量')
+        hold.addWidget(self.hold)
+        hold_form = QFormLayout()
+        self.hold_level = QSpinBox()
+        self.hold_level.setRange(10, 100)
+        self.hold_level.setSuffix(' %')
+        self.hold_level.setValue(80)
+        hold_form.addRow('目标电量', self.hold_level)
+        hold.addLayout(hold_form)
+        self.hold_status = label('—', 'muted')
+        hold.addWidget(self.hold_status)
+        self.button(hold, '应用自动维持', 'charge-hold', self.apply_hold)
+        layout.addWidget(label('启用自动维持后,后台计时器会覆盖手动“停充供电”设置;关闭自动维持会恢复自动充电。设置保存在本机,开机后由计时器继续维持。', 'warning'))
         layout.addStretch()
 
     def build_keyboard(self):
@@ -909,6 +925,11 @@ class Window(QMainWindow):
                                    (self.end_limit, 'charge_control_end_threshold')):
                 if battery.get(name) is not None and 0 <= battery[name] <= 100:
                     control.setValue(battery[name])
+            hold = snapshot.get('charge_hold') or {}
+            if type(hold.get('enabled')) is bool:
+                self.hold.setChecked(hold['enabled'])
+            if type(hold.get('level')) is int and 10 <= hold['level'] <= 100:
+                self.hold_level.setValue(hold['level'])
         if 'keyboard' not in self.dirty:
             self.media.setChecked(keyboard.get('media_keys') != 1)
         if 'pen' not in self.dirty:
@@ -917,6 +938,13 @@ class Window(QMainWindow):
             if writing:
                 self.tool.setCurrentIndex(self.tool.findData(writing['tool']))
                 self.level.setValue(writing['level'])
+        hold = snapshot.get('charge_hold') or {}
+        if hold.get('enabled'):
+            active = battery.get('charge_behaviour') == 'inhibit-charge'
+            self.hold_status.setText(
+                f"已启用:目标 {hold.get('level', '—')}%;当前{'旁路供电中' if active else '正常充电中'}")
+        else:
+            self.hold_status.setText('未启用:充电行为由手动设置决定')
         self.syncing = False
         enabled = supported and bool(snapshot.get('service')) and not self.demo and not self.busy
         for action, button in self.buttons.items():
@@ -960,6 +988,11 @@ class Window(QMainWindow):
                    'end': self.end_limit.value(), 'experimental': True}
         if self.message('确认实验性充电阈值', '此功能尚未完成跨阈值、睡眠与长时验证。使用原始 SOC，可能与桌面电量不同。\n是否只为当前运行期应用？', True):
             self.perform(request)
+
+    def apply_hold(self):
+        request = {'action': 'charge-hold', 'enabled': self.hold.isChecked(),
+                   'level': self.hold_level.value()}
+        self.perform(request)
 
     def apply_writing(self):
         request = {'action': 'pen-writing', 'enabled': self.writing.isChecked(),

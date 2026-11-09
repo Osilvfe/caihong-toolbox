@@ -36,6 +36,7 @@ def test_unknown_values_stay_unknown(paths):
     snapshot = read_snapshot(paths)
     assert snapshot['device']['supported']
     assert snapshot['device']['model'] == 'Caihong Test'
+    assert snapshot['charge_hold'] == {'enabled': False, 'level': 80}
     assert snapshot['battery']['state_of_health'] is None
     assert snapshot['battery']['capacity_ratio'] is None
     assert snapshot['adapter']['online'] is None
@@ -120,6 +121,8 @@ def test_wrong_board_cannot_control_charge(charging):
     {'action': 'charge-reset'}, {'action': 'pen-feedback'},
     {'action': 'service-set', 'name': 'caihong-ssc.service', 'enabled': True},
     {'action': 'charge-limit', 'start': 75, 'end': 80, 'experimental': True},
+    {'action': 'charge-hold', 'enabled': True, 'level': 80},
+    {'action': 'charge-hold', 'enabled': False, 'level': 50},
     *[{'action': action, 'enabled': enabled} for action in (
         'charge-bypass', 'keyboard-media', 'keyboard-touchpad')
       for enabled in (True, False)],
@@ -140,12 +143,18 @@ def test_allowed_requests(payload):
     {'action': 'charge-limit', 'start': -1, 'end': 80, 'experimental': True},
     {'action': 'charge-limit', 'start': 70, 'end': 101, 'experimental': True},
     {'action': 'charge-limit', 'start': 70, 'end': 80, 'experimental': False},
+    {'action': 'charge-hold', 'enabled': 1, 'level': 80},
+    {'action': 'charge-hold', 'enabled': True, 'level': 9},
+    {'action': 'charge-hold', 'enabled': True, 'level': 101},
+    {'action': 'charge-hold', 'enabled': True, 'level': True},
+    {'action': 'charge-hold', 'enabled': True},
     {'action': 'pen-writing', 'enabled': True, 'tool': 'unknown', 'level': 3},
     {'action': 'pen-writing', 'enabled': True, 'tool': 'pencil', 'level': True},
     {'action': 'pen-writing', 'enabled': True, 'tool': 'pencil', 'level': 6},
     {'action': 'service-set', 'name': 'sshd.service', 'enabled': True},
     {'action': 'service-set', 'name': 'caihong-toolbox.service', 'enabled': False},
     {'action': 'service-set', 'name': 'caihong-ssc.service', 'enabled': 1},
+    {'action': 'service-set', 'name': 'caihong-toolbox-charge-guard.timer', 'enabled': False},
 ])
 def test_rejects_arbitrary_requests(payload):
     with pytest.raises(ValueError):

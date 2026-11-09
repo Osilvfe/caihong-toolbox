@@ -14,7 +14,10 @@ install:
 	install -m644 caihong_toolbox/*.py $(DESTDIR)/usr/lib/caihong-toolbox/caihong_toolbox/
 	install -m755 bin/caihong-toolbox $(DESTDIR)/usr/bin/caihong-toolbox
 	install -m755 bin/caihong-toolbox-service $(DESTDIR)/usr/lib/caihong-toolbox/caihong-toolbox-service
+	install -m755 bin/caihong-toolbox-charge-guard $(DESTDIR)/usr/lib/caihong-toolbox/caihong-toolbox-charge-guard
 	install -Dm644 packaging/caihong-toolbox.service $(DESTDIR)/usr/lib/systemd/system/caihong-toolbox.service
+	install -Dm644 packaging/caihong-toolbox-charge-guard.service $(DESTDIR)/usr/lib/systemd/system/caihong-toolbox-charge-guard.service
+	install -Dm644 packaging/caihong-toolbox-charge-guard.timer $(DESTDIR)/usr/lib/systemd/system/caihong-toolbox-charge-guard.timer
 	install -Dm644 packaging/org.caihong.Toolbox1.service $(DESTDIR)/usr/share/dbus-1/system-services/org.caihong.Toolbox1.service
 	install -Dm644 packaging/org.caihong.Toolbox1.conf $(DESTDIR)/usr/share/dbus-1/system.d/org.caihong.Toolbox1.conf
 	install -Dm644 packaging/org.caihong.toolbox.policy $(DESTDIR)/usr/share/polkit-1/actions/org.caihong.toolbox.policy

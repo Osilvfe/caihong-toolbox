@@ -21,6 +21,10 @@ It is installed by default in the
 
 - Switch between normal charging and bypass power, which stops battery charging
   while keeping the adapter connected.
+- Hold the battery near a chosen level automatically (default 80%): bypass power
+  at the target and resume charging one step below. A small background timer
+  keeps the setting after reboot and overrides the manual bypass switch while
+  enabled.
 - Set experimental charge start and stop thresholds for the current session.
 - View firmware-reported health, cycle count, capacity, and estimated input and
   battery power.
@@ -92,6 +96,9 @@ enabled as a boot service.
   administrator prompt.
 - The app does not flash kernels, modules or boot images.
 - Charge thresholds are experimental and apply only to the current session.
+- Enabling the automatic charge hold installs and starts a small systemd timer
+  (`caihong-toolbox-charge-guard.timer`); disabling it stops the timer and
+  restores normal charging.
 - Tests become view-only when the matching kernel interface or accessory is
   missing.
 - Microphone recordings are temporary and deleted when the test is closed.

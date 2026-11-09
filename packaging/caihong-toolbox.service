@@ -7,6 +7,7 @@ Type=dbus
 BusName=org.caihong.Toolbox1
 ExecStart=/usr/lib/caihong-toolbox/caihong-toolbox-service
 User=root
+StateDirectory=caihong-toolbox
 UMask=0077
 NoNewPrivileges=yes
 ProtectSystem=strict

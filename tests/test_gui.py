@@ -186,6 +186,24 @@ def test_experimental_limit_requires_confirmation(window, monkeypatch):
     assert calls == []
 
 
+def test_charge_hold_card_reflects_snapshot(window):
+    window.update_status(demo_snapshot())
+    assert window.hold.isChecked()
+    assert window.hold_level.value() == 80
+    assert '已启用' in window.hold_status.text()
+    assert 'charge-hold' in window.buttons
+    assert not window.buttons['charge-hold'].isEnabled()
+
+
+def test_charge_hold_apply_builds_request(window, monkeypatch):
+    calls = []
+    monkeypatch.setattr(window, 'perform', calls.append)
+    window.hold.setChecked(False)
+    window.hold_level.setValue(85)
+    window.apply_hold()
+    assert calls == [{'action': 'charge-hold', 'enabled': False, 'level': 85}]
+
+
 def test_unverified_pen_combination_requires_confirmation(window, monkeypatch):
     window.writing.setChecked(True)
     window.level.setValue(5)

@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodically enforce the Caihong charge hold
+
+[Timer]
+OnBootSec=20s
+OnUnitInactiveSec=20s
+AccuracySec=3s
+Unit=caihong-toolbox-charge-guard.service
+
+[Install]
+WantedBy=timers.target

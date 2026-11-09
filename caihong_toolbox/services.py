@@ -3,7 +3,9 @@ import subprocess
 
 
 UNIT_PATTERN = re.compile(r'^caihong-[a-z0-9-]+\.(?:service|timer)$')
-PROTECTED = {'caihong-toolbox.service', 'caihong-mark-boot-successful.service'}
+CHARGE_HOLD_TIMER = 'caihong-toolbox-charge-guard.timer'
+PROTECTED = {'caihong-toolbox.service', 'caihong-mark-boot-successful.service',
+             CHARGE_HOLD_TIMER}
 
 DETAILS = {
     'caihong-adbd.service': ('ADB 调试服务', '按设备模式启动 ADB 守护进程；关闭后仍可在终端手动运行 adb。', None),
@@ -21,6 +23,7 @@ DETAILS = {
     'caihong-pen-pair.timer': ('手写笔自动配对', '重试最近磁吸过的笔配对。', 'pen'),
     'caihong-ssc.service': ('传感器子系统', '运行 Qualcomm Sensor Subsystem 监听器。', None),
     'caihong-toolbox.service': ('工具箱后台', '提供只读状态和经 Polkit 授权的设置接口。', None),
+    'caihong-toolbox-charge-guard.timer': ('自动维持电量', '周期性按设定电量在旁路供电与正常充电之间切换;由“自动维持电量”开关管理。', None),
 }
 
 
@@ -124,6 +127,15 @@ def read_services():
 
 def set_service(name, enabled):
     validate_managed_service(name)
+    return _set_service(name, enabled)
+
+
+def set_internal_service(name, enabled):
+    """Toggle a unit owned by the toolbox itself, bypassing the protected list."""
+    return _set_service(name, enabled)
+
+
+def _set_service(name, enabled):
     if type(enabled) is not bool:
         raise ValueError('服务开关值必须为布尔值')
     action = 'enable' if enabled else 'disable'

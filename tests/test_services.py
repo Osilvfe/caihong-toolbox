@@ -76,6 +76,17 @@ def test_services_use_systemctl_enable_now_and_disable_now(monkeypatch):
     ]
 
 
+def test_charge_hold_timer_is_protected_but_internal_toggle_works(monkeypatch):
+    with pytest.raises(ValueError):
+        services.set_service(services.CHARGE_HOLD_TIMER, True)
+    calls = []
+    monkeypatch.setattr(services, '_run', lambda arguments, timeout=4: (
+        calls.append((arguments, timeout)) or Mock(returncode=0, stdout='', stderr='')))
+    result = services.set_internal_service(services.CHARGE_HOLD_TIMER, True)
+    assert '已启用并运行' in result['message']
+    assert calls == [(['systemctl', 'enable', '--now', services.CHARGE_HOLD_TIMER], 20)]
+
+
 def test_service_status_exposes_read_only_service_inventory(monkeypatch):
     from caihong_toolbox.service import Service
     service = Service.__new__(Service)

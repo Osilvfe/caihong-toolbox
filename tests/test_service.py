@@ -82,6 +82,18 @@ def test_service_set_reaches_allowlisted_backend(service, monkeypatch):
     assert called == [('caihong-ssc.service', False)]
 
 
+def test_charge_hold_reaches_its_backend(service, monkeypatch):
+    compatible = service.paths.path('/proc/device-tree/compatible')
+    compatible.parent.mkdir(parents=True)
+    compatible.write_text('oneplus,caihong\x00')
+    called = []
+    monkeypatch.setattr('caihong_toolbox.service.set_charge_hold',
+                        lambda paths, enabled, level: called.append((paths, enabled, level)) or {'message': 'ok'})
+    result = service.apply({'action': 'charge-hold', 'enabled': True, 'level': 80})
+    assert result == {'message': 'ok'}
+    assert called == [(service.paths, True, 80)]
+
+
 @pytest.mark.parametrize('request_data', [{'action': 'pen-touch-start', 'undocked': True},
                                            {'action': 'pen-slide-set', 'enabled': True}])
 def test_touch_start_binds_actual_bus_sender(service, request_data):

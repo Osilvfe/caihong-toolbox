@@ -6,6 +6,7 @@ import threading
 
 from gi.repository import Gio, GLib
 
+from .charge_guard import set_charge_hold
 from .companion import InputManager
 from .hardware import Paths, Unavailable, apply_charge, is_caihong, read_snapshot, validate_request
 from .pen_touch import PenTouchSession
@@ -91,6 +92,8 @@ class Service:
             logging.info('applying setting: %s', json.dumps(request, ensure_ascii=False))
             if request['action'] == 'service-set':
                 return set_service(request['name'], request['enabled'])
+            if request['action'] == 'charge-hold':
+                return set_charge_hold(self.paths, request['enabled'], request['level'])
             if request['action'].startswith('charge-'):
                 apply_charge(self.paths, request)
             elif request['action'].startswith('keyboard-'):

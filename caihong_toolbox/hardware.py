@@ -7,6 +7,7 @@ import stat
 import subprocess
 import time
 
+from .charge_hold import load_config, validate_level
 from .power import (active_value, capability_summary, classify_protocol,
                     parse_pps_capabilities, path_power_uw, pps_current_limit)
 from .services import validate_managed_service
@@ -180,6 +181,7 @@ def read_snapshot(paths=None):
     return {
         'device': {'supported': is_caihong(paths), 'model': text(paths.path('/proc/device-tree/model')),
                    'kernel': platform.release(), 'architecture': platform.machine()},
+        'charge_hold': load_config(paths),
         'battery': battery, 'adapter': adapter, 'keyboard': keyboard, 'pen': pen,
         'diagnostics': {name: text(paths.battery / ('device/' + name)) for name in (
             'oneplus_charge_control_status', 'oneplus_power_diagnostics', 'oneplus_ffc_status')},
@@ -191,6 +193,7 @@ def validate_request(request):
         raise ValueError('无效的设置请求')
     schemas = {
         'charge-bypass': {'enabled'}, 'charge-limit': {'start', 'end', 'experimental'},
+        'charge-hold': {'enabled', 'level'},
         'charge-reset': set(), 'keyboard-media': {'enabled'},
         'keyboard-touchpad': {'enabled'},
         'pen-writing': {'enabled', 'tool', 'level'}, 'pen-feedback': set(),
@@ -208,6 +211,8 @@ def validate_request(request):
             raise ValueError('必须满足 0 ≤ 恢复阈值 < 停止阈值 ≤ 100')
         if request['experimental'] is not True:
             raise ValueError('充电阈值尚待完整实测，需要明确确认实验风险')
+    if action == 'charge-hold':
+        validate_level(request['level'])
     if action == 'pen-writing':
         if request['tool'] not in ('pencil', 'eraser', 'ballpoint', 'fountain'):
             raise ValueError('不支持的笔工具')
