@@ -24,8 +24,11 @@ It is installed by default in the
 - Set experimental charge start and stop thresholds for the current session.
 - View firmware-reported health, cycle count, capacity, and estimated input and
   battery power.
-- See the detected charging protocol (USB PD, PPS, VOOC/SVOOC where known) and
-  PPS current limits.
+- Distinguish fixed PD, PPS, VOOC/SVOOC, ordinary USB charging, negotiation,
+  safety lockout, and power output.
+- Prefer the kernel's active protocol state. Charger PDO/APDO capabilities,
+  configured input limits, and measured current are shown separately. Supporting
+  PPS does not mean it is in use; uncertain protocols stay unconfirmed.
 
 ### Performance and temperature
 

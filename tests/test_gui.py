@@ -166,18 +166,46 @@ def test_charge_page_shows_power_protocol_and_capability(window):
     assert 'buck 6.2 W + 双泵 24.5 W' in window.power_details.text()
     assert 'PD 3.0' in window.power_details.text()
     assert '正插' in window.power_details.text()
+    assert '非当前协议' in window.power_details.text()
+    assert '不等于实际电流' in window.power_details.text()
 
 
 def test_charge_page_does_not_call_vooc_pps(window):
     snapshot = demo_snapshot()
-    snapshot['adapter'].update(protocol='VOOC / SVOOC · 双泵',
-                               pps_current_limit_ma=None,
-                               capabilities={'available': False, 'fixed': [], 'pps': []},
-                               capability_summary=None)
+    snapshot['adapter'].update(protocol='VOOC / SVOOC · 双泵', protocol_kind='vooc',
+                               online=0, buck_power_uw=None,
+                               protocol_evidence='内核当前协议所有者为 vooc')
     window.update_status(snapshot)
     assert 'VOOC' in window.charge_protocol.value.text()
     assert window.pps_limit.value.text() == '不适用'
     assert '私有快充协议' in window.pps_limit.caption.text()
+    assert window.source.value.text() == '已接入'
+    assert 'buck 已挂起 + 双泵' in window.power_details.text()
+    assert 'vooc' in window.charge_protocol.caption.text()
+
+
+def test_fixed_pd_with_pps_capability_does_not_claim_pps_is_running(window):
+    snapshot = demo_snapshot()
+    snapshot['adapter'].update(protocol='USB PD 固定电压', protocol_kind='pd')
+    window.update_status(snapshot)
+    assert window.charge_protocol.value.text() == 'USB PD 固定电压'
+    assert window.pps_limit.value.text() == '未使用'
+    assert '固定 PD' in window.pps_limit.caption.text()
+
+
+@pytest.mark.parametrize('kind, protocol, source', [
+    ('disconnected', '未接入', '未接入'),
+    ('otg', 'USB OTG · 对外供电', '对外供电'),
+    ('unknown', '接入状态未知', '未知'),
+])
+def test_gui_does_not_confuse_output_or_missing_status_with_input(window, kind, protocol, source):
+    snapshot = demo_snapshot()
+    snapshot['adapter'].update(protocol=protocol, protocol_kind=kind,
+                               connected=None if kind == 'unknown' else False,
+                               input_power_uw=None)
+    window.update_status(snapshot)
+    assert window.source.value.text() == source
+    assert window.input_power.value.text() == '—'
 
 
 def test_poll_does_not_overwrite_pending_edits(window):

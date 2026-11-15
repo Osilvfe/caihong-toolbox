@@ -161,13 +161,16 @@ def demo_snapshot():
                     'charge_behaviour': 'auto', 'charge_control_start_threshold': 95,
                     'charge_control_end_threshold': 100, 'control_available': True,
                     'controller': {'raw_soc': '73', 'pending': '0', 'last_rc': '0'}},
-        'adapter': {'online': 1, 'usb_type': 'Unknown [SDP] DCP PD_PPS',
+        'adapter': {'online': 1, 'connected': True, 'usb_type': 'Unknown [SDP] DCP PD_PPS',
                     'active_type': 'SDP', 'voltage_now': 8900000, 'current_now': 700000,
                     'voltage_max': 9400000, 'current_max': 5000000,
                     'input_current_limit': 2000000, 'buck_power_uw': 6230000,
                     'pump_power_uw': 24500000, 'input_power_uw': 30730000,
                     'pumps_online': 2, 'pps_current_limit_ma': 5000,
                     'protocol': 'USB PD PPS · 双泵',
+                    'protocol_kind': 'pps',
+                    'protocol_evidence': '内核当前协议所有者为 pps，已确认双泵工作',
+                    'pps_limit_voltage_mv': 8900,
                     'capability_summary': 'PPS 5.0–11.0 V / 5.0 A；PPS 5.0–20.0 V / 5.0 A；固定最高 20.0 V / 5.0 A',
                     'pd': {'supported': True, 'revision': '3.0', 'power_role': 'sink',
                            'data_role': 'device', 'orientation': 'normal',
@@ -420,7 +423,7 @@ class Window(QMainWindow):
         self.capacity = Metric('当前电量', '桌面电量与固件原始 SOC 可能不同')
         self.temperature = Metric('电池温度', '来自电池固件，不替代温控保护')
         self.health = Metric('固件报告健康度', '不是独立测量的容量健康结论')
-        self.source = Metric('适配器状态', '不根据功率猜测 VOOC 是否运行')
+        self.source = Metric('适配器状态', '优先读取物理输入；buck 挂起不等于拔线')
         for index, metric in enumerate((self.capacity, self.temperature, self.health, self.source)):
             grid.addWidget(metric, index // 2, index % 2)
         layout.addLayout(grid)
@@ -491,8 +494,8 @@ class Window(QMainWindow):
         grid.setSpacing(12)
         self.input_power = Metric('估算输入功率', '活动 USB/buck 与电荷泵路径的电压×电流求和，不是外部功率计')
         self.battery_power = Metric('电池端功率', '固件报告的电池侧功率，不等于适配器输入功率')
-        self.charge_protocol = Metric('识别到的协议', '综合 USB 类型、PD 能力与活动电荷泵；未知时不猜测')
-        self.pps_limit = Metric('PPS 电流上限', '适配器在此电压范围公布的 APDO 上限，不代表当前已取满')
+        self.charge_protocol = Metric('当前协议', '优先读取内核协议状态；电源能力不代表当前使用的协议')
+        self.pps_limit = Metric('适配器 PPS 能力上限', 'APDO 公布的上限，不是实际电流或输入限流设置')
         for index, metric in enumerate((self.input_power, self.battery_power,
                                         self.charge_protocol, self.pps_limit)):
             grid.addWidget(metric, index // 2, index % 2)
@@ -1028,7 +1031,10 @@ class Window(QMainWindow):
         self.health.value.setText(formatted(battery.get('state_of_health'), suffix='%', precision=0))
         adapter = snapshot['adapter']
         online = adapter.get('online')
-        self.source.value.setText('已接入' if online == 1 else '未接入' if online == 0 else '未知')
+        connected = adapter.get('connected', online)
+        kind = adapter.get('protocol_kind')
+        self.source.value.setText('对外供电' if kind == 'otg' else
+                                   '已接入' if connected == 1 else '未接入' if connected == 0 else '未知')
         self.charge_progress.setValue(battery.get('capacity') or 0)
         mode = {'auto': '自动充电', 'inhibit-charge': '请求停充供电'}.get(battery.get('charge_behaviour'), '未知')
         controller = battery.get('controller', {})
@@ -1051,7 +1057,8 @@ class Window(QMainWindow):
             f"控制器：pending={controller.get('pending', '—')}  last_rc={controller.get('last_rc', '—')}；正电流为充电，负电流为电池补电。")
         pd = adapter.get('pd', {})
         pump_count, pump_total = adapter.get('pumps_online'), len(adapter.get('pumps') or [])
-        buck = formatted(adapter.get('buck_power_uw'), 1000000, ' W')
+        buck = (formatted(adapter.get('buck_power_uw'), 1000000, ' W')
+                if online == 1 else '已挂起' if connected else '—')
         pump_power = formatted(adapter.get('pump_power_uw'), 1000000, ' W')
         path_text = (f'buck {buck} + 双泵 {pump_power}' if pump_count == 2 else
                      f'buck {buck} + 单泵 {pump_power}' if pump_count == 1 else f'buck {buck}')
@@ -1063,19 +1070,37 @@ class Window(QMainWindow):
         self.input_power.value.setText(formatted(adapter.get('input_power_uw'), 1000000, ' W'))
         self.battery_power.value.setText(formatted(battery.get('power_uw'), 1000000, ' W'))
         self.charge_protocol.value.setText(adapter.get('protocol', '—'))
+        self.charge_protocol.caption.setText(adapter.get('protocol_evidence') or
+                                             '缺少内核活动协议证据，不根据功率猜测')
         pps_limit = adapter.get('pps_current_limit_ma')
         self.pps_limit.value.setText(formatted(pps_limit, 1000, ' A'))
-        if pps_limit is None and 'VOOC' in (adapter.get('protocol') or ''):
+        if kind == 'vooc':
             self.pps_limit.value.setText('不适用')
-            self.pps_limit.caption.setText('VOOC/SVOOC 使用私有快充协议，不使用 USB PD APDO')
+            self.pps_limit.caption.setText('当前 VOOC/SVOOC 使用私有快充协议；即使电源支持 PPS，也不代表正在使用')
+        elif kind == 'pd':
+            self.pps_limit.value.setText('未使用')
+            self.pps_limit.caption.setText('当前是固定 PD；APDO 仅表示电源另有 PPS 能力')
+        elif kind in ('disconnected', 'otg'):
+            self.pps_limit.value.setText('不适用')
+            self.pps_limit.caption.setText('当前没有外部受电输入')
+        elif kind != 'pps':
+            self.pps_limit.value.setText('未启用')
+            self.pps_limit.caption.setText('尚未确认 PPS 正在工作；电源能力与当前活动协议分开显示')
         else:
-            self.pps_limit.caption.setText('适配器在此电压范围公布的 APDO 上限，不代表当前已取满')
+            reference = formatted(adapter.get('pps_limit_voltage_mv'), 1000, ' V', 2)
+            self.pps_limit.caption.setText(f'电源在 {reference} 公布的 APDO 上限，不是实测电流或设备输入限流')
+        capability_text = adapter.get('capability_summary') or (
+            '固定 PD 测试进行中，暂不读取可能阻塞的能力节点' if adapter.get('capabilities_busy') else
+            '未读取到 PDO/APDO；不据此推断私有协议')
+        source_path = ('对外供电' if kind == 'otg' else '状态未知' if connected is None else
+                       path_text if connected else '未接入')
         self.power_details.setText(
-            f"供电路径：{path_text if online == 1 else '未接入'}  ·  活动电荷泵 {pump_count if pump_count is not None else '—'}/{pump_total or '—'}\n"
+            f"供电路径：{source_path}  ·  活动电荷泵 {pump_count if pump_count is not None else '—'}/{pump_total or '—'}\n"
             f"USB 类型：{adapter.get('active_type') or '—'}（厂商上报）  ·  PD {pd.get('revision') or '—'}  ·  "
             f"供电角色 {role}  ·  数据角色 {data_role}  ·  {orientation}\n"
-            f"充电器公开能力：{adapter.get('capability_summary') or '未读取到 PPS/PDO 能力'}\n"
-            f"输入上限：{formatted(adapter.get('current_max'), 1000000, ' A')} @ {formatted(adapter.get('voltage_max'), 1000000, ' V')}；"
+            f"充电器公开能力（非当前协议）：{capability_text}\n"
+            f"输入限流设置：{formatted(adapter.get('input_current_limit'), 1000000, ' A')}（不等于实际电流）；"
+            f"USB 报告上限：{formatted(adapter.get('current_max'), 1000000, ' A')} @ {formatted(adapter.get('voltage_max'), 1000000, ' V')}；"
             f"功率为 sysfs 遥测估算，协议识别不替代外置功率计或示波器验证。")
         running = keyboard.get('compensation_running', False)
         self.keyboard_details.setText(

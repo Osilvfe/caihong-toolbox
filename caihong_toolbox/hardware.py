@@ -7,8 +7,9 @@ import stat
 import subprocess
 import time
 
-from .power import (active_value, capability_summary, classify_protocol,
-                    parse_pps_capabilities, path_power_uw, pps_current_limit)
+from .power import (active_value, capability_summary, detect_protocol, input_connected,
+                    parse_fastchg_status, parse_pps_capabilities, path_power_uw,
+                    pps_current_limit)
 from .resources import ResourceSampler
 from .services import validate_managed_service
 
@@ -23,6 +24,7 @@ class Paths:
         self.battery = self.path('/sys/class/power_supply/qcom-battmgr-bat')
         self.pps_cached = None
         self.pps_cached_at = 0.0
+        self.pps_cache_key = None
         self.resources = ResourceSampler(self.root)
 
     def path(self, name):
@@ -127,7 +129,10 @@ def read_snapshot(paths=None):
         'input_current_limit')}
     adapter['usb_type'] = text(usb / 'usb_type')
     adapter['active_type'] = active_value(adapter['usb_type'])
-    adapter['buck_power_uw'] = path_power_uw(adapter['voltage_now'], adapter['current_now'])
+    adapter['fastchg_raw'] = text(usb / 'device/oneplus_fastchg_status')
+    adapter['fastchg'] = parse_fastchg_status(adapter['fastchg_raw'])
+    adapter['buck_power_uw'] = (path_power_uw(adapter['voltage_now'], adapter['current_now'])
+                                if adapter['online'] == 1 else None)
     pumps = []
     for pump in sorted(paths.path('/sys/class/power_supply').glob('sc8547-*')):
         entry = {name: number(pump / name) for name in (
@@ -138,34 +143,70 @@ def read_snapshot(paths=None):
     online_pumps = [pump for pump in pumps if pump['online'] == 1]
     adapter['pumps'] = pumps
     adapter['pumps_online'] = len(online_pumps)
+    adapter['connected'] = input_connected(adapter)
     adapter['pump_power_uw'] = (sum(pump['power_uw'] or 0 for pump in online_pumps)
                                 if online_pumps else None)
-    power_paths = ([adapter['buck_power_uw']] if adapter['buck_power_uw'] else []
-                   if adapter['online'] == 1 else [])
+    power_paths = [adapter['buck_power_uw']] if adapter['buck_power_uw'] else []
     power_paths.extend(pump['power_uw'] for pump in online_pumps if pump['power_uw'])
-    adapter['input_power_uw'] = sum(power_paths) if power_paths else None
+    adapter['input_power_uw'] = (sum(power_paths) if power_paths
+                                and adapter['connected'] is not False else None)
     pd_path = paths.path('/sys/class/usb_power_delivery/pd0')
+    port = paths.path('/sys/class/typec/port0')
+    partner = paths.path('/sys/class/typec/port0-partner')
     adapter['pd'] = {
-        'supported': text(pd_path / 'device/supports_usb_power_delivery') == 'yes',
+        'supported': (text(partner / 'supports_usb_power_delivery') or
+                      text(pd_path / 'device/supports_usb_power_delivery')) == 'yes',
         'revision': text(pd_path / 'revision'),
-        'power_role': active_value(text(pd_path / 'device/device/power_role')),
-        'data_role': active_value(text(pd_path / 'device/device/data_role')),
-        'orientation': text(pd_path / 'device/device/orientation'),
-        'operation_mode': text(pd_path / 'device/device/power_operation_mode'),
+        'power_role': active_value(text(port / 'power_role') or
+                                   text(pd_path / 'device/device/power_role')),
+        'data_role': active_value(text(port / 'data_role') or
+                                  text(pd_path / 'device/device/data_role')),
+        'orientation': text(port / 'orientation') or text(pd_path / 'device/device/orientation'),
+        'operation_mode': text(port / 'power_operation_mode') or
+                          text(pd_path / 'device/device/power_operation_mode'),
+        'partner_present': partner.is_dir(),
     }
-    if adapter['online'] == 1:
+    state = adapter['fastchg']
+    cache_key = (state.get('generation'), state.get('owner'), state.get('pps_available'),
+                 adapter['active_type'], adapter['pd']['power_role'])
+    if cache_key != paths.pps_cache_key:
+        paths.pps_cached = None
+        paths.pps_cached_at = 0.0
+        paths.pps_cache_key = cache_key
+    adapter['capabilities_busy'] = state.get('owner') == 'pd'
+    if adapter['connected'] is True and adapter['pd']['power_role'] != 'source':
         now = time.monotonic()
-        if paths.pps_cached is None or now - paths.pps_cached_at >= 15:
+        refresh_after = 15 if (paths.pps_cached or {}).get('available') else 1
+        if not adapter['capabilities_busy'] and (paths.pps_cached is None
+                                                 or now - paths.pps_cached_at >= refresh_after):
             paths.pps_cached = parse_pps_capabilities(text(usb / 'device/oneplus_pps_capabilities'))
             paths.pps_cached_at = now
     else:
         paths.pps_cached = None
         paths.pps_cached_at = 0.0
+    final_status = text(usb / 'device/oneplus_fastchg_status')
+    final_state = parse_fastchg_status(final_status)
+    adapter['protocol_transition'] = final_state != state
+    if adapter['protocol_transition']:
+        adapter['fastchg_raw'] = final_status
+        adapter['fastchg'] = final_state
+        adapter['connected'] = input_connected(adapter)
+        adapter['input_power_uw'] = None
+        paths.pps_cached = None
+        paths.pps_cached_at = 0.0
+        paths.pps_cache_key = None
     adapter['capabilities'] = paths.pps_cached or parse_pps_capabilities(None)
     adapter['capability_summary'] = capability_summary(adapter['capabilities'])
-    adapter['pps_current_limit_ma'] = pps_current_limit(adapter['capabilities'])
-    adapter['protocol'] = classify_protocol(adapter, adapter['pd'], adapter['capabilities'],
-                                             adapter['pumps_online'])
+    voltage = max([adapter['voltage_now'] or 0] +
+                  [pump['voltage_now'] or 0 for pump in online_pumps])
+    adapter['pps_limit_voltage_mv'] = voltage // 1000 if voltage > 0 else None
+    adapter['pps_current_limit_ma'] = (pps_current_limit(adapter['capabilities'], voltage // 1000)
+                                       if voltage > 0 else None)
+    adapter.update(detect_protocol(adapter, adapter['pd'], adapter['capabilities'],
+                                    adapter['pumps_online']))
+    if adapter['protocol_kind'] == 'otg':
+        adapter['connected'] = False
+        adapter['input_power_uw'] = None
     keyboard = {'available': False, 'media_keys': None, 'compensation_gate': None}
     nodes = keyboard_nodes(paths)
     if len(nodes) == 1:
